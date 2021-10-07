@@ -1,12 +1,13 @@
 package com.github.aleksandar_stefanovic.kotlin_lexer.automata
 
-class Automaton(
-    val states: IntRange,
-    val edges: Set<Edge>,
-    val startState: Int = states.first(),
-    val endStates: Map<Int, List<String>> // TODO should this be just a string, or a token with an optional value?
-) {
-    data class Edge(val from: Int, val to: Int, val symbol: Char) {
+/**
+ * Nondeterministic automaton with exactly one start state, and exactly one end state,
+ * suitable for applying Thompson's Construction.
+ */
+class Automaton(val startState: Int, val endState: Int, val edges: Set<Edge>) {
+
+    // Null char indicates ε-edge
+    data class Edge(val from: Int, val to: Int, val symbol: Char?) {
         override fun toString() = "($from, $to, $symbol)"
     }
 
@@ -14,26 +15,31 @@ class Automaton(
         TODO()
     }
 
-    fun acceptString(str: String): String? {
+    fun clone(): Automaton { // TODO test
+        // Each of the existing state indices gets assigned a new value, and those values are stored in a map
+        val hashMap = HashMap<Int, Int>()
 
-        var currentState = startState
-        var lastFinalState: Int? = null
-
-        for (char in str) {
-            if (currentState in endStates) {
-                lastFinalState = currentState
-            }
-
-            val edgeToNext = edges.find { it.from == currentState && it.symbol == char }
-
-            if (edgeToNext != null) {
-                currentState = edgeToNext.to
-            } else {
-                break
+        fun getNewValue(old: Int): Int {
+            return hashMap.getOrPut(old) {
+                currentIndex++
             }
         }
 
-        // Due to rule priority, it should return the token with the max priority
-        return endStates[lastFinalState]?.maxOrNull() // FIXME: max, first or last?
+        return Automaton(
+            getNewValue(startState),
+            getNewValue(endState),
+            this.edges.map { (from, to, char) -> Edge(getNewValue(from), getNewValue(to), char) }.toSet()
+        )
+
+    }
+
+    companion object {
+        // FIXME this causes issues with Kotlin/Native
+        // A counter that ensures that the index of every automaton is unique
+        var currentIndex: Int = 0
+
+        fun getUniqueIndexPair(): Pair<Int, Int> { // TODO test
+            return Pair(currentIndex++, currentIndex++)
+        }
     }
 }

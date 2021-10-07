@@ -11,8 +11,8 @@ Create a Kotlin Multiplatform lexer, with an ability to load lexical rules exter
 ### Progress:
 
 - [x] Recognize and parse regular expressions into ASTs (partially done, needs to cover more edge cases and needs more testing)
-- [ ] Use Thompson's Construction to parse given regular expressions into finite automata
-- [ ] Use Powerset construction to turn NFAs into DFAs
+- [x] Use Thompson's Construction to parse given regular expressions into finite automata (needs testing)
+- [ ] Use Power set construction to turn NFAs into DFAs
 - [ ] Use minimization to optimize automata
 - [ ] Combine automata into a single automaton which recognizes lexemes
 - [ ] Add optional values to matched lexemes

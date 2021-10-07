@@ -1,6 +1,5 @@
 package com.github.aleksandar_stefanovic.kotlin_lexer.regex
 
-import com.github.aleksandar_stefanovic.kotlin_lexer.regex.AST.*
 import util.splitBy
 
 /**
@@ -38,12 +37,12 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
     }
 
     fun compile(): AST {
-        return expression.map(AST::Unparsed)
+        return expression.map(::Unparsed)
             .run { escapePass(this) }
             .run { characterSetPass(this) }
             .run { groupingPass(this) }
             .run { repeatPass(this) }
-            .run { customRepeatPass(this) }
+            .run { rangeRepeatPass(this) }
             .run { concatenationPass(this) }
             .run { alternationPass(this) }
     }
@@ -71,11 +70,11 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
     }
 
     private fun characterSetPass(asts: List<SingleCharacter>): List<AST> {
-        return bracketsPairing(asts, '[', ']', AST::CharacterSet)
+        return bracketsPairing(asts, '[', ']', ::CharacterSet)
     }
 
     private fun groupingPass(asts: List<AST>): List<AST> {
-        return bracketsPairing(asts, '(', ')', AST::Grouping)
+        return bracketsPairing(asts, '(', ')', ::Grouping)
     }
 
     private fun repeatPass(asts: List<AST>): List<AST> {
@@ -102,15 +101,15 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
             if (lookaheadAst is Unparsed) {
                 when (lookaheadAst.char) {
                     '*' -> {
-                        newAsts.add(Repeat(currentAST, 0, Int.MAX_VALUE))
+                        newAsts.add(Repeat.Star(currentAST))
                         index += 2
                     }
                     '+' -> {
-                        newAsts.add(Repeat(currentAST, 1, Int.MAX_VALUE))
+                        newAsts.add(Repeat.Plus(currentAST))
                         index += 2
                     }
                     '?' -> {
-                        newAsts.add(Repeat(currentAST, 0, 1))
+                        newAsts.add(Repeat.QuestionMark(currentAST))
                         index += 2
                     }
                     else -> {
@@ -129,7 +128,7 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
         return newAsts
     }
 
-    private fun customRepeatPass(asts: List<AST>): List<AST> {
+    private fun rangeRepeatPass(asts: List<AST>): List<AST> {
 
         // TODO check for dangling metacharacters
 
@@ -145,7 +144,7 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
 
             val currentAST = asts[index].let {
                 if (it is Grouping) {
-                    Grouping(customRepeatPass(it.asts))
+                    Grouping(rangeRepeatPass(it.asts))
                 } else {
                     it
                 }
@@ -206,7 +205,7 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
             }
 
             // All checks passed, this is a valid range quantifier
-            newAsts.add(Repeat(currentAST, firstNum, secondNum))
+            newAsts.add(Repeat.Range(currentAST, firstNum..secondNum))
             index = innerIndex + 1
         }
 
