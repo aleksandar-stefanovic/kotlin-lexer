@@ -123,7 +123,9 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
             }
         }
 
-        newAsts.add(asts[index])
+        asts.getOrNull(index)?.let {
+            newAsts.add(it) // Add only if valid index
+        }
 
         return newAsts
     }

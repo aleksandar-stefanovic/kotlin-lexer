@@ -72,7 +72,7 @@ class Grouping(val asts: List<AST>) : AST() { // TODO grouping can have only one
     override fun toString() = asts.joinToString(prefix = "(", separator = "", postfix = ")")
 }
 
-sealed class Repeat(protected val ast: AST) : AST() {
+sealed class Repeat(val ast: AST) : AST() {
 
     class Star(ast: AST) : Repeat(ast) {
         override fun toAutomaton(): Automaton {
@@ -163,7 +163,7 @@ sealed class Repeat(protected val ast: AST) : AST() {
     }
 }
 
-class Concatenation(private val asts: List<AST>) : AST() {
+class Concatenation(val asts: List<AST>) : AST() {
 
     override fun toAutomaton() =
         asts.map { it.toAutomaton() }
@@ -178,7 +178,7 @@ class Concatenation(private val asts: List<AST>) : AST() {
     override fun toString() = asts.joinToString(separator = "")
 }
 
-class Alternation(private val asts: List<AST>) : AST() {
+class Alternation(val asts: List<AST>) : AST() {
 
     override fun toAutomaton(): Automaton {
         val (start, end) = Automaton.getUniqueIndexPair()

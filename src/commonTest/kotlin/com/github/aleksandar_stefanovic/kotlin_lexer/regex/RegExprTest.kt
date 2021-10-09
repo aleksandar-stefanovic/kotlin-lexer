@@ -1,5 +1,6 @@
 package com.github.aleksandar_stefanovic.kotlin_lexer.regex
 
+import com.github.aleksandar_stefanovic.kotlin_lexer.regex.Repeat.Range
 import kotlin.test.*
 
 internal class RegExprTest {
@@ -16,9 +17,9 @@ internal class RegExprTest {
 
         val ast = regExpr.compile()
 
-        val escapedAST = (ast as AST.Concatenation).asts[3]
+        val escapedAST = (ast as Concatenation).asts[3]
 
-        assertIs<AST.Literal>(escapedAST)
+        assertIs<Literal>(escapedAST)
         assertEquals('\\', escapedAST.char)
     }
 
@@ -31,21 +32,21 @@ internal class RegExprTest {
     fun customRepeatPass() {
         val ast = RegExpr("a{2,5}").compile()
 
-        assertIs<AST.Repeat>(ast)
+        assertIs<Range>(ast)
 
         val innerAST = ast.ast
 
-        assertIs<AST.SingleCharacter>(innerAST)
+        assertIs<SingleCharacter>(innerAST)
         assertEquals('a', innerAST.char)
-        assertEquals(2, ast.from)
-        assertEquals(5, ast.to)
+        assertEquals(2, ast.range.first)
+        assertEquals(5, ast.range.last)
     }
 
     @Test
     fun groupingPass() {
         val ast = RegExpr("(a)").compile()
 
-        assertIs<AST.Grouping>(ast)
+        assertIs<Grouping>(ast)
     }
 
     @Test
@@ -53,25 +54,25 @@ internal class RegExprTest {
 
         val ast = RegExpr("(a{2,3}){2,5}").compile()
 
-        assertIs<AST.Repeat>(ast)
+        assertIs<Range>(ast)
 
         val innerAST = ast.ast
 
-        assertIs<AST.Grouping>(innerAST)
+        assertIs<Grouping>(innerAST)
 
         assertEquals(1, innerAST.asts.size)
 
-        val innerRepeatAST = innerAST.asts[0] as AST.Repeat
+        val innerRepeatAST = innerAST.asts[0] as Range
 
-        assertEquals('a', (innerRepeatAST.ast as AST.SingleCharacter).char)
+        assertEquals('a', (innerRepeatAST.ast as SingleCharacter).char)
 
-        assertEquals(2, innerRepeatAST.from)
+        assertEquals(2, innerRepeatAST.range.first)
 
-        assertEquals(3, innerRepeatAST.to)
+        assertEquals(3, innerRepeatAST.range.last)
 
-        assertEquals(2, ast.from)
+        assertEquals(2, ast.range.first)
 
-        assertEquals(5, ast.to)
+        assertEquals(5, ast.range.last)
     }
 
     @Test
@@ -79,10 +80,10 @@ internal class RegExprTest {
 
         val ast = RegExpr("ab").compile()
 
-        assertIs<AST.Concatenation>(ast)
+        assertIs<Concatenation>(ast)
         assertEquals(2, ast.asts.size)
-        assertEquals('a', (ast.asts[0] as AST.SingleCharacter).char)
-        assertEquals('b', (ast.asts[1] as AST.SingleCharacter).char)
+        assertEquals('a', (ast.asts[0] as SingleCharacter).char)
+        assertEquals('b', (ast.asts[1] as SingleCharacter).char)
     }
 
     @Test
@@ -90,7 +91,7 @@ internal class RegExprTest {
 
         val ast = RegExpr("(ab)cd").compile()
 
-        assertIs<AST.Concatenation>(ast)
+        assertIs<Concatenation>(ast)
 
         val children = ast.asts
 
@@ -98,16 +99,16 @@ internal class RegExprTest {
 
         val firstChild = children[0]
 
-        assertIs<AST.Grouping>(firstChild)
+        assertIs<Grouping>(firstChild)
         assertEquals(1, firstChild.asts.size)
-        assertIs<AST.Concatenation>(firstChild.asts[0])
+        assertIs<Concatenation>(firstChild.asts[0])
     }
 
     @Test
     fun alternationPassTest() {
         val ast = RegExpr("ab|cd|eg").compile()
 
-        assertIs<AST.Alternation>(ast)
+        assertIs<Alternation>(ast)
         assertEquals(3, ast.asts.size)
     }
 
@@ -116,13 +117,13 @@ internal class RegExprTest {
 
         val ast = RegExpr("(ab|cd)").compile()
 
-        assertIs<AST.Grouping>(ast)
+        assertIs<Grouping>(ast)
 
         assertEquals(1, ast.asts.size)
 
         val child = ast.asts[0]
 
-        assertIs<AST.Alternation>(child)
+        assertIs<Alternation>(child)
         assertEquals(2, child.asts.size)
 
     }
