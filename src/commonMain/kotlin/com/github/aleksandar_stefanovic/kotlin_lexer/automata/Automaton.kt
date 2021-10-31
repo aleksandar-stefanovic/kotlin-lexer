@@ -1,10 +1,13 @@
 package com.github.aleksandar_stefanovic.kotlin_lexer.automata
 
-/**
- * Nondeterministic automaton with exactly one start state, and exactly one end state,
- * suitable for applying Thompson's Construction.
- */
-class Automaton(val startState: Int, val endState: Int, val edges: Set<Edge>) {
+import com.github.aleksandar_stefanovic.kotlin_lexer.util.merge
+
+class Automaton(
+    val startState: Int,
+    val endStates: Set<Int>,
+    val edges: Set<Edge>,
+    val tokens: Map<Int, Any> = emptyMap()
+) {
 
     // Null char indicates ε-edge
     data class Edge(val from: Int, val to: Int, val symbol: Char?) {
@@ -69,9 +72,13 @@ class Automaton(val startState: Int, val endState: Int, val edges: Set<Edge>) {
         val dfaStartState = stateMapping[epsilonClosure(setOf(startState))]!!
 
         val dfaEndStates = stateMapping
-            .filter { (stateSet, _) -> this.endState in stateSet }
-            .map { (_, state) -> state }
-            .toSet()
+            .filter { (nfaStates, _) -> nfaStates.any { it in this.endStates } }
+            .map { (nfaStates, dfaState) ->
+                val tokens = nfaStates.mapNotNull { state ->
+                    this.tokens[state]
+                }
+                Pair(dfaState, tokens)
+            }.toMap()
 
         val indexedDfaEdges = dfaEdges.map { (fromSet, toSet, symbol) ->
             DFA.Edge(stateMapping[fromSet]!!, stateMapping[toSet]!!, symbol)
@@ -86,23 +93,40 @@ class Automaton(val startState: Int, val endState: Int, val edges: Set<Edge>) {
 
         fun getNewValue(old: Int): Int {
             return hashMap.getOrPut(old) {
-                currentIndex++
+                getUniqueIndex()
             }
         }
 
         return Automaton(
             getNewValue(startState),
-            getNewValue(endState),
-            this.edges.map { (from, to, char) -> Edge(getNewValue(from), getNewValue(to), char) }.toSet()
+            this.endStates.map(::getNewValue).toSet(),
+            this.edges.map { (from, to, char) -> Edge(getNewValue(from), getNewValue(to), char) }.toSet(),
+            this.tokens.map { (state, token) -> getNewValue(state) to token }.toMap()
+        )
+    }
+
+    fun merge(other: Automaton): Automaton {
+        val newStartState = getUniqueIndex()
+
+        val edgesFromStartState = setOf(
+            Edge(newStartState, this.startState, null),
+            Edge(newStartState, other.startState, null)
         )
 
+        val edges = this.edges union other.edges union edgesFromStartState
+
+        val newEndStates = this.endStates union other.endStates
+
+        val newTokens = this.tokens merge other.tokens
+
+        return Automaton(newStartState, newEndStates, edges, newTokens)
     }
 
     override fun toString(): String {
         return """start state: $startState
-          |final state: $endState
-          |edges:
-          |${edges.joinToString("\n")}
+                 |final states: ${endStates.joinToString { "$it (Token: ${tokens[it]})" }}
+                 |edges:
+                 |${edges.joinToString("\n")}
         """.trimMargin()
     }
 
@@ -110,7 +134,11 @@ class Automaton(val startState: Int, val endState: Int, val edges: Set<Edge>) {
         // FIXME this causes issues with Kotlin/Native
         // A counter that ensures that the index of every automaton is unique
         @Suppress("VARIABLE_IN_SINGLETON_WITHOUT_THREAD_LOCAL")
-        var currentIndex: Int = 0
+        private var currentIndex: Int = 0
+
+        fun getUniqueIndex(): Int {
+            return currentIndex++
+        }
 
         fun getUniqueIndexPair(): Pair<Int, Int> {
             return Pair(currentIndex++, currentIndex++)

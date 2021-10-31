@@ -1,6 +1,6 @@
 package com.github.aleksandar_stefanovic.kotlin_lexer.regex
 
-import util.splitBy
+import com.github.aleksandar_stefanovic.kotlin_lexer.util.splitBy
 
 /**
  *  Kotlin standard library has a Regular expression class (see [kotlin.text.Regex]), but the issue is that, the output
@@ -28,7 +28,7 @@ import util.splitBy
  *    - Anchors (^, $)
  *
  */
-class RegExpr(/* @Language("RegExp") */ private val expression: String) {
+class RegExpr(/* @Language("RegExp") */ private val expression: String, val token: Any? = null) {
 
     init {
         if (expression.isEmpty()) {
@@ -37,7 +37,14 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
     }
 
     fun compile(): AST {
-        return expression.map(::Unparsed)
+        return runPasses(expression.map(::Unparsed)).also {
+            it.token = token
+        }
+
+    }
+
+    private fun runPasses(asts: List<AST>): AST {
+        return asts
             .run { escapePass(this) }
             .run { characterSetPass(this) }
             .run { groupingPass(this) }
@@ -47,34 +54,37 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
             .run { alternationPass(this) }
     }
 
-    private fun escapePass(asts: List<Unparsed>): List<SingleCharacter> {
-        val noSpecialCharsList = mutableListOf<SingleCharacter>()
+    private fun escapePass(asts: List<AST>): List<AST> {
+        val resultingList = mutableListOf<AST>()
         var index = 0
         while (index < asts.size) {
-            val ast = asts[index]
-            if (ast.char == '\\') {
+            val possibleEscapeCharacter = asts[index]
+            if (possibleEscapeCharacter is Unparsed && possibleEscapeCharacter.char == '\\') {
                 if (index + 1 < asts.size) {
+                    val charToEscape = asts[index + 1]
                     // TODO check whether it's escaping a special character, or referring to a character group
-                    noSpecialCharsList.add(Literal(asts[index + 1].char))
-                    index += 2
+                    if (charToEscape is Unparsed) {
+                        resultingList.add(Literal(charToEscape.char))
+                        index += 2
+                    }
                 } else {
                     error("Escape cannot be the last character")
                 }
             } else {
-                noSpecialCharsList.add(ast)
+                resultingList.add(possibleEscapeCharacter)
                 index++
             }
         }
 
-        return noSpecialCharsList
+        return resultingList
     }
 
-    private fun characterSetPass(asts: List<SingleCharacter>): List<AST> {
+    private fun characterSetPass(asts: List<AST>): List<AST> {
         return bracketsPairing(asts, '[', ']', ::CharacterSet)
     }
 
     private fun groupingPass(asts: List<AST>): List<AST> {
-        return bracketsPairing(asts, '(', ')', ::Grouping)
+        return bracketsPairing(asts, '(', ')') { Grouping(runPasses(it)) }
     }
 
     private fun repeatPass(asts: List<AST>): List<AST> {
@@ -89,13 +99,7 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
         var index = 0
         while (index < asts.size - 1) {
 
-            val currentAST = asts[index].let {
-                if (it is Grouping) {
-                    Grouping(repeatPass(it.asts))
-                } else {
-                    it
-                }
-            }
+            val currentAST = asts[index]
 
             val lookaheadAst = asts[index + 1]
             if (lookaheadAst is Unparsed) {
@@ -144,13 +148,7 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
 
         while (index < asts.size - 1) {
 
-            val currentAST = asts[index].let {
-                if (it is Grouping) {
-                    Grouping(rangeRepeatPass(it.asts))
-                } else {
-                    it
-                }
-            }
+            val currentAST = asts[index]
 
             var innerIndex = index + 1
 
@@ -221,9 +219,6 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
     private fun concatenationPass(asts: List<AST>): List<AST> {
 
         if (asts.size == 1) {
-            if (asts[0] is Grouping) {
-                return listOf(Grouping(concatenationPass((asts[0] as Grouping).asts)))
-            }
             return asts
         }
 
@@ -236,20 +231,27 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
         asts.forEach { ast ->
             if (ast is SingleCharacter && ast.char in charactersToAvoid) {
                 // Merge previous asts into a Concatenation, and then add the avoided symbol
-                if (accumulatedASTs.isNotEmpty()) {
-                    newAsts.add(Concatenation(accumulatedASTs))
+                if (accumulatedASTs.isNotEmpty()) { // TODO if only one member, don't create concatenation
+                    if (accumulatedASTs.size == 1) {
+                        newAsts.add(accumulatedASTs.first())
+                    } else {
+                        newAsts.add(Concatenation(accumulatedASTs.toList() /* Create copy */))
+                    }
                     accumulatedASTs.clear()
                 }
                 newAsts.add(ast)
-            } else if (ast is Grouping) {
-                accumulatedASTs.add(Grouping(concatenationPass(ast.asts)))
             } else {
                 accumulatedASTs.add(ast)
             }
         }
 
         if (accumulatedASTs.isNotEmpty()) {
-            newAsts.add(Concatenation(accumulatedASTs))
+            // If there are any asts in the "buffer", empty the buffer into resulting asts
+            if (accumulatedASTs.size == 1) {
+                newAsts.add(accumulatedASTs.first())
+            } else {
+                newAsts.add(Concatenation(accumulatedASTs))
+            }
         }
 
         return newAsts
@@ -257,15 +259,20 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
 
     private fun alternationPass(asts: List<AST>): AST {
 
-        // Apply to groupings
-        val newAsts = asts.map {
-            if (it is Grouping) {
-                Grouping(listOf(alternationPass(it.asts)))
-            } else it
+        val firstAST = asts.first()
+
+        if (firstAST is Unparsed && firstAST.char == '|') {
+            error("Alternation cannot be the first character")
+        }
+
+        val lastAST = asts.last()
+
+        if (lastAST is Unparsed && lastAST.char == '|') {
+            error("Alternation cannot be the last character")
         }
 
         // Splits into a list of lists, and each nested list should be a singleton
-        val split = newAsts.splitBy { it is Unparsed && it.char == '|' }
+        val split = asts.splitBy { it is Unparsed && it.char == '|' }
 
         if (split.size == 1) {
             /*
@@ -274,11 +281,11 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
             list should be that exact root. Otherwise, something went wrong with the passes.
             */
 
-            if (newAsts.size != 1) {
+            if (asts.size != 1) {
                 error("Something went wrong")
             }
 
-            return newAsts[0]
+            return asts[0]
         }
 
         if (split.any { it.size > 1 }) {
@@ -291,18 +298,7 @@ class RegExpr(/* @Language("RegExp") */ private val expression: String) {
             error("Something went wrong")
         }
 
-        val splitAsts = split.map { it.first() }
-
-
-        if (split.first().isEmpty()) {
-            error("Alternation cannot be the first character")
-        }
-
-        if (split.last().isEmpty()) {
-            error("Alternation cannot be the last character")
-        }
-
-
+        val splitAsts = split.flatten() // Since those are singletons, flatten to the list of their elements
 
         // Singleton list
         return Alternation(splitAsts)

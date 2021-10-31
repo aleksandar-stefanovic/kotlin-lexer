@@ -60,15 +60,15 @@ internal class RegExprTest {
 
         assertIs<Grouping>(innerAST)
 
-        assertEquals(1, innerAST.asts.size)
+        val range = innerAST.ast
 
-        val innerRepeatAST = innerAST.asts[0] as Range
+        assertIs<Range>(range)
 
-        assertEquals('a', (innerRepeatAST.ast as SingleCharacter).char)
+        assertEquals('a', (range.ast as SingleCharacter).char)
 
-        assertEquals(2, innerRepeatAST.range.first)
+        assertEquals(2, range.range.first)
 
-        assertEquals(3, innerRepeatAST.range.last)
+        assertEquals(3, range.range.last)
 
         assertEquals(2, ast.range.first)
 
@@ -100,8 +100,7 @@ internal class RegExprTest {
         val firstChild = children[0]
 
         assertIs<Grouping>(firstChild)
-        assertEquals(1, firstChild.asts.size)
-        assertIs<Concatenation>(firstChild.asts[0])
+        assertIs<Concatenation>(firstChild.ast)
     }
 
     @Test
@@ -115,13 +114,11 @@ internal class RegExprTest {
     @Test
     fun alternationParsesGroupings() {
 
-        val ast = RegExpr("(ab|cd)").compile()
+        val grouping = RegExpr("(ab|cd)").compile()
 
-        assertIs<Grouping>(ast)
+        assertIs<Grouping>(grouping)
 
-        assertEquals(1, ast.asts.size)
-
-        val child = ast.asts[0]
+        val child = grouping.ast
 
         assertIs<Alternation>(child)
         assertEquals(2, child.asts.size)

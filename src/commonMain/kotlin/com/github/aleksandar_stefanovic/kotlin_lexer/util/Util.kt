@@ -1,4 +1,4 @@
-package util
+package com.github.aleksandar_stefanovic.kotlin_lexer.util
 
 /**
  * Splits the iterable into multiple lists, by splitting the iterable on the elements for which the [predicate] returns
@@ -23,6 +23,11 @@ fun <T> Iterable<T>.splitBy(predicate: (T) -> Boolean): List<List<T>> {
     return lists
 }
 
-fun <T> Iterable<T>.splitBy(separator: T): List<List<T>> {
-    return this.splitBy { it == separator }
+infix fun <K, V> Map<K, V>.merge(other: Map<K, V>): Map<K, List<V>> {
+    val entryList = this.entries.toList() + other.entries.toList() // Contains duplicate keys, needs to be grouped
+
+    return entryList.groupBy (
+        keySelector = { (key, _) -> key },
+        valueTransform = { (_, value) -> value}
+    )
 }
